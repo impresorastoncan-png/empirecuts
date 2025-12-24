@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=DM+Sans:wght@400;500;700&display=swap');
+
+@import "tailwindcss";
+
+body {
+  @apply bg-black text-slate-100 font-sans;
+  font-family: 'DM Sans', sans-serif;
+  background-image: url('https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=2070');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: -1;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cinzel', serif;
+}
