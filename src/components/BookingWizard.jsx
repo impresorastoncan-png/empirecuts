@@ -418,7 +418,7 @@ END:VCALENDAR
         <div className="fixed bottom-0 left-0 w-full bg-slate-900/80 backdrop-blur-sm">
           <div className="max-w-md mx-auto flex items-center justify-between p-4 border-t border-white/10">
             {step > 1 ? (
-              <button type="button" onClick={handleBack} className="font-bold py-3 px-6 rounded-lg text-white bg-slate-700 hover:bg-slate-600">Back</button>
+              <button type="button" onClick={handleBack} className="font-bold py-3 px-6 rounded-lg text-white bg-gray-700 hover:bg-gray-600 transition-colors duration-300">Back</button>
             ) : <div/>}
             
             {step < 5 && (
@@ -426,7 +426,7 @@ END:VCALENDAR
                 type="button"
                 onClick={handleNext}
                 disabled={isNextDisabled()}
-                className="font-bold py-3 px-6 rounded-lg text-black bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 transition-all duration-300 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
+                className="font-bold py-3 px-6 rounded-lg text-black bg-[#d4af37] hover:bg-[#e0c156] transition-all duration-300 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
               >
                 {step === 4 ? 'Proceed to Payment' : 'Next Step'}
               </button>
@@ -436,7 +436,7 @@ END:VCALENDAR
               <button
                 type="submit"
                 disabled={submissionStatus === 'loading' || !stripe}
-                className="font-bold py-3 px-6 rounded-lg text-black bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 transition-all duration-300 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
+                className="font-bold py-3 px-6 rounded-lg text-black bg-[#d4af37] hover:bg-[#e0c156] transition-all duration-300 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
               >
                 {submissionStatus === 'loading' ? 'Processing...' : `Confirm & Pay $${selectedService?.price}`}
               </button>
