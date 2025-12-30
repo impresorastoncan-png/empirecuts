@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
 
 const services = [
   { id: 1, name: 'Classic Fade', price: 35, duration: '45 min' },
@@ -10,9 +12,26 @@ const services = [
 // --- Webhook URL ---
 const WEBHOOK_URL = "https://hook.us2.make.com/yz3ayvd82t4n7ibgmlzqi52dv5a24vnc";
 
+const generateTimeSlots = () => {
+  const slots = [];
+  // Morning slots (08:00 - 12:00)
+  for (let i = 8; i < 12; i++) {
+    slots.push(`${i.toString().padStart(2, '0')}:00`);
+    slots.push(`${i.toString().padStart(2, '0')}:30`);
+  }
+  // Lunch break is 12:00-13:00, so we skip it
+  // Afternoon slots (13:00 - 17:00)
+  for (let i = 13; i < 17; i++) {
+    slots.push(`${i.toString().padStart(2, '0')}:00`);
+    slots.push(`${i.toString().padStart(2, '0')}:30`);
+  }
+  return slots;
+};
+
 const BookingWizard = () => {
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState(null);
+  const [selectedBarber, setSelectedBarber] = useState('');
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -21,6 +40,9 @@ const BookingWizard = () => {
 
   // 'idle', 'loading', 'success', 'error'
   const [submissionStatus, setSubmissionStatus] = useState('idle'); 
+
+  const stripe = useStripe();
+  const elements = useElements();
 
   const sendNotification = async (formData) => {
     try {
@@ -44,26 +66,53 @@ const BookingWizard = () => {
     }
   };
   
-  const handleConfirmBooking = async () => {
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setSubmissionStatus('loading');
-    const formData = {
-      type: "solicitud",
-      service: selectedService?.name,
-      price: selectedService?.price,
-      date: bookingDate,
-      time: bookingTime,
-      name: customerName,
-      email: customerEmail, // Added email to form data
-      phone: customerPhone,
-    };
 
-    try {
-      await sendNotification(formData);
-      setSubmissionStatus('success');
-    } catch (error) {
+    if (!stripe || !elements) {
       setSubmissionStatus('error');
+      return;
+    }
+
+    const cardElement = elements.getElement(CardElement);
+
+    const { error, paymentMethod } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: cardElement,
+    });
+
+    if (error) {
+      console.log('[error]', error);
+      setSubmissionStatus('error');
+    } else {
+      console.log('[PaymentMethod]', paymentMethod);
+      
+      const formData = {
+        type: "solicitud",
+        service: selectedService?.name,
+        price: selectedService?.price,
+        barber: selectedBarber,
+        barber_name: selectedBarber, // Ensure barber_name is included
+        date: bookingDate,
+        time: bookingTime,
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone,
+        paymentMethodId: paymentMethod.id, // (simulated)
+        payment_status: 'paid',
+        amount: selectedService?.price
+      };
+      
+      try {
+        await sendNotification(formData);
+        setSubmissionStatus('success');
+      } catch {
+        setSubmissionStatus('error');
+      }
     }
   };
+
 
   const handleNext = () => setStep(step + 1);
   const handleBack = () => setStep(step - 1);
@@ -71,28 +120,32 @@ const BookingWizard = () => {
   const resetBooking = () => {
       setStep(1);
       setSelectedService(null);
+      setSelectedBarber('');
       setBookingDate('');
       setBookingTime('');
       setCustomerName('');
-      setCustomerEmail(''); // Reset email state
+      setCustomerEmail('');
       setCustomerPhone('');
       setSubmissionStatus('idle');
   }
 
   const StepIndicator = () => (
     <div className="flex justify-center items-center mb-8">
-      {[1, 2, 3, 4].map((s) => (
-        <div key={s} className="flex items-center">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-              step >= s ? 'bg-amber-500 text-black' : 'bg-slate-700 text-slate-400'
-            }`}
-          >
-            {s}
+      {['Service', 'Time', 'Details', 'Confirm', 'Payment'].map((name, index) => {
+        const s = index + 1;
+        return (
+          <div key={s} className="flex items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                step >= s ? 'bg-amber-500 text-black' : 'bg-slate-700 text-slate-400'
+              }`}
+            >
+              {s}
+            </div>
+            {s < 5 && <div className={`w-12 h-1 ${step > s ? 'bg-amber-500' : 'bg-slate-700'}`} />}
           </div>
-          {s < 4 && <div className={`w-12 h-1 ${step > s ? 'bg-amber-500' : 'bg-slate-700'}`} />}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -144,13 +197,18 @@ const BookingWizard = () => {
               </div>
               <div>
                 <label htmlFor="time" className="block text-sm font-medium text-slate-300 mb-1">Time</label>
-                <input
-                  type="time"
+                <select
                   id="time"
                   value={bookingTime}
                   onChange={(e) => setBookingTime(e.target.value)}
+                  required
                   className="w-full bg-white/5 backdrop-blur-sm border-2 border-white/10 rounded-lg p-3 text-white focus:ring-amber-500 focus:border-amber-500"
-                />
+                >
+                  <option value="" disabled>Select a time</option>
+                  {generateTimeSlots().map((time) => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -160,6 +218,20 @@ const BookingWizard = () => {
           <div>
             <h2 className="text-2xl font-bold text-center mb-2 text-white">Your Details</h2>
             <div className="space-y-4 pt-4">
+            <div>
+                <label htmlFor="barber" className="block text-sm font-medium text-slate-300 mb-1">Choose your Barber</label>
+                <select
+                  id="barber"
+                  value={selectedBarber}
+                  onChange={(e) => setSelectedBarber(e.target.value)}
+                  required
+                  className="w-full bg-white/5 backdrop-blur-sm border-2 border-white/10 rounded-lg p-3 text-white focus:ring-amber-500 focus:border-amber-500"
+                >
+                  <option value="" disabled>Select a barber</option>
+                  <option value="Joe">Joe</option>
+                  <option value="Mary">Mary</option>
+                </select>
+              </div>
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-1">Full Name</label>
                 <input
@@ -205,6 +277,10 @@ const BookingWizard = () => {
                 <span className="text-slate-400">Service:</span>
                 <span className="font-bold text-white">{selectedService?.name}</span>
               </div>
+               <div className="flex justify-between">
+                <span className="text-slate-400">Barber:</span>
+                <span className="font-bold text-white">{selectedBarber}</span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Date:</span>
                 <span className="font-bold text-white">{bookingDate} @ {bookingTime}</span>
@@ -223,11 +299,37 @@ const BookingWizard = () => {
                 <span className="font-bold text-white">{customerPhone}</span>
               </div>
             </div>
-            <div className="mt-4 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg text-amber-500 text-sm">
-              <p className="font-bold">IMPORTANT:</p> 
-              <p>You will receive an immediate confirmation link via SMS and Email. Please confirm within 15 minutes to secure your stylist.</p>
-            </div>
           </div>
+        );
+        case 5: // Payment
+        return (
+            <div>
+                <h2 className="text-2xl font-bold text-center mb-2 text-white">Payment Details</h2>
+                <div className="space-y-4 pt-4">
+                    <p className="text-slate-300 text-center">
+                        Total to pay: <span className="font-bold text-amber-400">${selectedService?.price}</span>.
+                    </p>
+                    <div className="p-4 bg-slate-800/50 rounded-lg">
+                        <CardElement options={{
+                            style: {
+                                base: {
+                                    color: '#FFFFFF',
+                                    fontFamily: '"DM Sans", sans-serif',
+                                    fontSmoothing: 'antialiased',
+                                    fontSize: '16px',
+                                    '::placeholder': {
+                                        color: '#aab7c4'
+                                    }
+                                },
+                                invalid: {
+                                    color: '#fa755a',
+                                    iconColor: '#fa755a'
+                                }
+                            }
+                        }} />
+                    </div>
+                </div>
+            </div>
         );
       default:
         return null;
@@ -237,7 +339,7 @@ const BookingWizard = () => {
   const isNextDisabled = () => {
     if (step === 1 && !selectedService) return true;
     if (step === 2 && (!bookingDate || !bookingTime)) return true;
-    if (step === 3 && (!customerName || !customerEmail || !customerPhone)) return true; // Added email validation
+    if (step === 3 && (!customerName || !customerEmail || !customerPhone || !selectedBarber)) return true;
     return false;
   }
   
@@ -246,17 +348,14 @@ const BookingWizard = () => {
       console.log("Generating calendar file...");
   
       const eventName = selectedService?.name;
-      // Basic date parsing - for a real app, use a library like date-fns or moment
       const eventDate = bookingDate && bookingTime ? new Date(`${bookingDate}T${bookingTime}`) : new Date();
   
-      // Fallback for demo if date is not set properly
       if (!bookingDate || !bookingTime) {
-          eventDate.setDate(eventDate.getDate() + 1); // Tomorrow
-          eventDate.setHours(10, 0, 0, 0); // at 10:00 AM
+          eventDate.setDate(eventDate.getDate() + 1);
+          eventDate.setHours(10, 0, 0, 0);
       }
   
       const startTime = eventDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-      // End time is 1 hour after start time for simplicity
       eventDate.setHours(eventDate.getHours() + 1);
       const endTime = eventDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   
@@ -293,8 +392,8 @@ END:VCALENDAR
 
     return (
         <div className="text-center p-4">
-            <h2 className="text-2xl font-bold text-amber-500 mb-4">Booking Request Sent!</h2>
-            <p className="text-slate-300 mb-6">Check your phone, Bella (AI) is sending your confirmation SMS.</p>
+            <h2 className="text-2xl font-bold text-amber-500 mb-4">Booking Confirmed!</h2>
+            <p className="text-slate-300 mb-6">Your appointment is set. You'll receive a confirmation email shortly.</p>
             <div className="space-y-4">
                 <button 
                     onClick={handleAddToCalendar}
@@ -313,28 +412,43 @@ END:VCALENDAR
   return (
     <div className="pb-24">
       <StepIndicator />
-      {renderStep()}
-      
-      <div className="fixed bottom-0 left-0 w-full bg-slate-900/80 backdrop-blur-sm">
-        <div className="max-w-md mx-auto flex items-center justify-between p-4 border-t border-white/10">
-          {step > 1 ? (
-            <button onClick={handleBack} className="font-bold py-3 px-6 rounded-lg text-white bg-slate-700 hover:bg-slate-600">Back</button>
-          ) : <div/>}
-          
-          <button
-            onClick={step === 4 ? handleConfirmBooking : handleNext}
-            disabled={isNextDisabled() || submissionStatus === 'loading'}
-            className="font-bold py-3 px-6 rounded-lg text-black bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 transition-all duration-300 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
-          >
-            {submissionStatus === 'loading' ? 'Sending...' : (step === 4 ? 'Confirm & Send' : 'Next Step')}
-          </button>
+      <form onSubmit={handleSubmit}>
+        {renderStep()}
+        
+        <div className="fixed bottom-0 left-0 w-full bg-slate-900/80 backdrop-blur-sm">
+          <div className="max-w-md mx-auto flex items-center justify-between p-4 border-t border-white/10">
+            {step > 1 ? (
+              <button type="button" onClick={handleBack} className="font-bold py-3 px-6 rounded-lg text-white bg-slate-700 hover:bg-slate-600">Back</button>
+            ) : <div/>}
+            
+            {step < 5 && (
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={isNextDisabled()}
+                className="font-bold py-3 px-6 rounded-lg text-black bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 transition-all duration-300 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                {step === 4 ? 'Proceed to Payment' : 'Next Step'}
+              </button>
+            )}
+
+            {step === 5 && (
+              <button
+                type="submit"
+                disabled={submissionStatus === 'loading' || !stripe}
+                className="font-bold py-3 px-6 rounded-lg text-black bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 transition-all duration-300 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                {submissionStatus === 'loading' ? 'Processing...' : `Confirm & Pay $${selectedService?.price}`}
+              </button>
+            )}
+          </div>
+          {submissionStatus === 'error' && (
+              <div className="max-w-md mx-auto text-center pb-2 text-red-400">
+                  Something went wrong with the payment. Please try again.
+              </div>
+          )}
         </div>
-        {submissionStatus === 'error' && (
-            <div className="max-w-md mx-auto text-center pb-2 text-red-400">
-                Something went wrong. Please try again.
-            </div>
-        )}
-      </div>
+      </form>
     </div>
   );
 };

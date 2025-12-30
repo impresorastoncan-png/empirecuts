@@ -1,4 +1,10 @@
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
 import BookingWizard from './components/BookingWizard';
+
+// Add your publishable key
+const stripePromise = loadStripe('pk_test_51SjLLBDm4HjSV1Er8jJg7KvpCZbxaB3HSsQx8yfI2fXZnrxkxuSbsdzopQxR5kdAtdqBNWJgTp2LnVDXcAuUn9tO00HXopHWl4'); // Replace with your actual publishable key
+
 
 const Header = () => (
   <header className="flex justify-between items-center p-4 max-w-md mx-auto w-full">
@@ -21,7 +27,9 @@ function App() {
         <div className="relative w-full max-w-md mx-auto backdrop-blur-xl bg-white/5 border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden">
           <Header />
           <main className="p-4 sm:p-6">
-            <BookingWizard />
+            <Elements stripe={stripePromise}>
+              <BookingWizard />
+            </Elements>
           </main>
         </div>
 
